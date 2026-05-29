@@ -44,7 +44,8 @@ import com.alertnet.app.ui.viewmodel.SendingState
 enum class ChatViewMode {
     CHAT,
     CAMERA,
-    PREVIEW
+    PREVIEW,
+    VIEWER
 }
 
 /**
@@ -64,6 +65,8 @@ fun ChatScreen(
     var viewMode by remember { mutableStateOf(ChatViewMode.CHAT) }
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     var capturedType by remember { mutableStateOf("image") }
+    var viewerUri by remember { mutableStateOf<Uri?>(null) }
+    var viewerType by remember { mutableStateOf("image") }
 
     var messageText by remember { mutableStateOf("") }
     var showLocationSheet by remember { mutableStateOf(false) }
@@ -145,15 +148,24 @@ fun ChatScreen(
                 MediaPreviewScreen(
                     mediaUri = uri,
                     mediaType = capturedType,
-                    onSend = { caption ->
+                    onSend = { finalUri, caption ->
                         if (capturedType == "video") {
-                            viewModel.sendVideo(uri, caption)
+                            viewModel.sendVideo(finalUri, caption)
                         } else {
-                            viewModel.sendImage(uri, caption)
+                            viewModel.sendImage(finalUri, caption)
                         }
                         viewMode = ChatViewMode.CHAT
                     },
                     onBack = { viewMode = ChatViewMode.CAMERA }
+                )
+            }
+        }
+        ChatViewMode.VIEWER -> {
+            viewerUri?.let { uri ->
+                MediaViewerScreen(
+                    mediaUri = uri,
+                    mediaType = viewerType,
+                    onBack = { viewMode = ChatViewMode.CHAT }
                 )
             }
         }
@@ -329,7 +341,17 @@ fun ChatScreen(
                                 onPauseVoice = { viewModel.pauseVoicePlayback() },
                                 onResumeVoice = { viewModel.resumeVoicePlayback() },
                                 onSeekVoice = { viewModel.seekVoicePlayback(it) },
-                                onViewOnMap = onViewOnMap
+                                onViewOnMap = onViewOnMap,
+                                onImageClick = { path ->
+                                    viewerUri = Uri.fromFile(java.io.File(path))
+                                    viewerType = "image"
+                                    viewMode = ChatViewMode.VIEWER
+                                },
+                                onVideoClick = { path ->
+                                    viewerUri = Uri.fromFile(java.io.File(path))
+                                    viewerType = "video"
+                                    viewMode = ChatViewMode.VIEWER
+                                }
                             )
                         }
                     }

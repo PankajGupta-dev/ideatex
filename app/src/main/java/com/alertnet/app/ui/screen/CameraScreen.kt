@@ -227,13 +227,19 @@ private fun CameraContent(
         imageCapture.flashMode = flashMode
     }
 
-    // Video recording timer
+    // Video recording timer with auto-stop limits
     LaunchedEffect(isRecordingVideo) {
         if (isRecordingVideo) {
             recordingDurationSeconds = 0
             while (isRecordingVideo) {
                 delay(1000)
                 recordingDurationSeconds++
+                if (recordingDurationSeconds >= 30) {
+                    activeRecording?.stop()
+                    activeRecording = null
+                    isRecordingVideo = false
+                    android.widget.Toast.makeText(context, "Maximum video duration reached (30s)", android.widget.Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -460,6 +466,15 @@ private fun CameraContent(
                                         if (hasAudio) withAudioEnabled()
                                     }
                                     .start(ContextCompat.getMainExecutor(context)) { event ->
+                                        if (event is VideoRecordEvent.Status) {
+                                            val bytes = event.recordingStats.numBytesRecorded
+                                            if (bytes >= 15 * 1024 * 1024) { // 15 MB Size Limit
+                                                activeRecording?.stop()
+                                                activeRecording = null
+                                                isRecordingVideo = false
+                                                android.widget.Toast.makeText(context, "Maximum video size reached (15MB)", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                        }
                                         if (event is VideoRecordEvent.Finalize) {
                                             isRecordingVideo = false
                                             if (!event.hasError()) {

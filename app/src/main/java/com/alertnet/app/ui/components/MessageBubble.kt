@@ -56,7 +56,9 @@ fun MessageBubble(
     onPauseVoice: () -> Unit = {},
     onResumeVoice: () -> Unit = {},
     onSeekVoice: (Float) -> Unit = {},
-    onViewOnMap: ((Double, Double) -> Unit)? = null
+    onViewOnMap: ((Double, Double) -> Unit)? = null,
+    onImageClick: ((String) -> Unit)? = null,
+    onVideoClick: ((String) -> Unit)? = null
 ) {
     val alignment = if (isSentByMe) Alignment.CenterEnd else Alignment.CenterStart
     val bubbleShape = if (isSentByMe) {
@@ -100,15 +102,19 @@ fun MessageBubble(
                         transferProgress = transferProgress,
                         onImageClick = {
                             mediaFilePath?.let { path ->
-                                val file = File(path)
-                                if (file.exists()) {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(Uri.fromFile(file), "image/*")
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {}
+                                if (onImageClick != null) {
+                                    onImageClick(path)
+                                } else {
+                                    val file = File(path)
+                                    if (file.exists()) {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(Uri.fromFile(file), "image/*")
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
+                                    }
                                 }
                             }
                         }
@@ -138,15 +144,19 @@ fun MessageBubble(
                         transferProgress = transferProgress,
                         onPlayClick = {
                             mediaFilePath?.let { path ->
-                                val file = File(path)
-                                if (file.exists()) {
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(Uri.fromFile(file), "video/*")
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) {}
+                                if (onVideoClick != null) {
+                                    onVideoClick(path)
+                                } else {
+                                    val file = File(path)
+                                    if (file.exists()) {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(Uri.fromFile(file), "video/*")
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) {}
+                                    }
                                 }
                             }
                         }

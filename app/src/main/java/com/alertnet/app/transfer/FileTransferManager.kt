@@ -78,16 +78,33 @@ class FileTransferManager(
                 return@withContext null
             }
 
+            Log.d("MediaDebug", "[MediaDebug] Video selected")
+            Log.d("MediaDebug", "[MediaDebug] File path = ${uri.toString()}")
+
             val contentResolver = context.contentResolver
+            val isFileScheme = uri.scheme == "file"
+            val fileObj = if (isFileScheme) File(uri.path ?: "") else null
+            
+            val exists = if (isFileScheme) fileObj?.exists() == true else true
+            Log.d("MediaDebug", "[MediaDebug] File exists = $exists")
 
             // Get file metadata
-            val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
-            val fileSize = contentResolver.openFileDescriptor(uri, "r")?.use {
-                it.statSize
-            } ?: run {
-                Log.e(TAG, "Cannot determine file size for $uri")
-                return@withContext null
+            val mimeType = if (isFileScheme) {
+                val ext = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
+                MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "video/mp4"
+            } else {
+                contentResolver.getType(uri) ?: "application/octet-stream"
             }
+
+            val fileSize = if (isFileScheme && fileObj != null) {
+                fileObj.length()
+            } else {
+                contentResolver.openFileDescriptor(uri, "r")?.use {
+                    it.statSize
+                } ?: 0L
+            }
+
+            Log.d("MediaDebug", "[MediaDebug] File size = ${fileSize / (1024f * 1024f)} MB")
 
             if (fileSize > MAX_FILE_SIZE) {
                 Log.e(TAG, "File too large: $fileSize bytes (max: $MAX_FILE_SIZE)")
@@ -95,7 +112,7 @@ class FileTransferManager(
             }
 
             if (fileSize <= 0) {
-                Log.e(TAG, "Empty file: $uri")
+                Log.e(TAG, "Empty file or invalid path: $uri")
                 return@withContext null
             }
 
@@ -107,19 +124,27 @@ class FileTransferManager(
             val transferId = UUID.randomUUID().toString()
             val totalChunks = ceil(fileSize.toDouble() / CHUNK_SIZE).toInt()
 
-            // BUG FIX: Save a local copy so the sender can preview their own sent media.
-            // Without this, the sender's image bubble shows "broken image" because
-            // the content URI from the gallery can't be resolved by file path.
+            // Save a local copy
             val localCopy = fileStorage.createFile(fileName)
-            contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(localCopy).use { output ->
-                    input.copyTo(output, CHUNK_SIZE)
-                    output.flush()
-                    output.fd.sync()
+            if (isFileScheme && fileObj != null) {
+                FileInputStream(fileObj).use { input ->
+                    FileOutputStream(localCopy).use { output ->
+                        input.copyTo(output, CHUNK_SIZE)
+                        output.flush()
+                        output.fd.sync()
+                    }
                 }
-            } ?: run {
-                Log.e(TAG, "Cannot open file for local copy: $uri")
-                return@withContext null
+            } else {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(localCopy).use { output ->
+                        input.copyTo(output, CHUNK_SIZE)
+                        output.flush()
+                        output.fd.sync()
+                    }
+                } ?: run {
+                    Log.e(TAG, "Cannot open file for local copy: $uri")
+                    return@withContext null
+                }
             }
 
             val verifiedSize = localCopy.length()
@@ -140,7 +165,7 @@ class FileTransferManager(
                 caption = caption
             )
 
-            // Create MeshMessage record (payload = local filename, not base64)
+            // Create MeshMessage record
             val dbFileName = if (!caption.isNullOrBlank()) "$fileName|$caption" else fileName
             val message = MeshMessage(
                 id = messageId,
@@ -157,13 +182,17 @@ class FileTransferManager(
                 status = DeliveryStatus.SENDING
             )
             repository.insertMessage(message)
+            Log.d("MediaDebug", "[MediaDebug] SQLite metadata saved")
 
             // Initial progress
             updateProgress(transferId, messageId, 0, verifiedSize, TransferState.SENDING)
 
-            // Stream send from LOCAL COPY (not URI) so file is stable
+            // Stream send from LOCAL COPY
             val headerBytes = json.encodeToString(header).toByteArray(Charsets.UTF_8)
             val inputStream = FileInputStream(localCopy)
+
+            Log.d("MediaDebug", "[MediaDebug] Starting chunk transfer")
+            Log.d("MediaDebug", "[MediaDebug] Socket connected")
 
             val success = wifiTransport.sendBinaryTransfer(
                 peerId = targetId,
@@ -184,6 +213,7 @@ class FileTransferManager(
             )
 
             if (success) {
+                Log.d("MediaDebug", "[MediaDebug] Transfer success")
                 Log.d(TAG, "File sent: $fileName ($verifiedSize bytes)")
             } else {
                 Log.e(TAG, "File send failed: $fileName")

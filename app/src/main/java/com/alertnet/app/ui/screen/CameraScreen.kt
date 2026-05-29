@@ -79,18 +79,28 @@ fun CameraScreen(
         )
     }
 
+
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        hasCameraPermission = permissions[Manifest.permission.CAMERA] == true
-        hasAudioPermission = permissions[Manifest.permission.RECORD_AUDIO] == true
+        val cameraGranted = permissions[Manifest.permission.CAMERA] == true
+        val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] == true
+        Log.d(TAG, "[CameraDebug] Permission result callback: camera=$cameraGranted, audio=$audioGranted")
+        Log.d(TAG, "[CameraDebug] Permission granted = $cameraGranted")
+        hasCameraPermission = cameraGranted
+        hasAudioPermission = audioGranted
     }
 
     LaunchedEffect(Unit) {
+        Log.d(TAG, "[CameraDebug] Camera icon clicked")
         if (!hasCameraPermission || !hasAudioPermission) {
+            Log.d(TAG, "[CameraDebug] Requesting permission")
             permissionLauncher.launch(
                 arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
             )
+        } else {
+            Log.d(TAG, "[CameraDebug] Permission granted = true")
         }
     }
 
@@ -199,27 +209,40 @@ private fun CameraContent(
         }
     }
 
-    // Bind CameraX Lifecycle
-    LaunchedEffect(lensFacing) {
-        val cameraProvider = ProcessCameraProvider.getInstance(context).get()
-        val cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
-        val preview = Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
+    // Dynamic log for CameraX Initialization
+    LaunchedEffect(Unit) {
+        Log.d(TAG, "[CameraDebug] Initializing CameraX")
+    }
 
-        try {
-            cameraProvider.unbindAll()
-            camera = cameraProvider.bindToLifecycle(
-                lifecycleOwner,
-                cameraSelector,
-                preview,
-                imageCapture,
-                videoCapture
-            )
-            maxZoomRatio = camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 5f
-        } catch (exc: Exception) {
-            Log.e(TAG, "Use case binding failed", exc)
-        }
+    // Bind CameraX Lifecycle (non-blocking)
+    LaunchedEffect(lensFacing) {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+        cameraProviderFuture.addListener({
+            try {
+                Log.d(TAG, "[CameraDebug] CameraProvider success")
+                val cameraProvider = cameraProviderFuture.get()
+                val cameraSelector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
+                
+                val preview = Preview.Builder().build().also {
+                    Log.d(TAG, "[CameraDebug] Preview attached")
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+
+                Log.d(TAG, "[CameraDebug] Binding use cases")
+                cameraProvider.unbindAll()
+                camera = cameraProvider.bindToLifecycle(
+                    lifecycleOwner,
+                    cameraSelector,
+                    preview,
+                    imageCapture,
+                    videoCapture
+                )
+                maxZoomRatio = camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 5f
+                Log.d(TAG, "[CameraDebug] Camera started successfully")
+            } catch (exc: Exception) {
+                Log.e(TAG, "[CameraDebug] Use case binding failed", exc)
+            }
+        }, ContextCompat.getMainExecutor(context))
     }
 
     // Dynamic Flash update
@@ -251,7 +274,10 @@ private fun CameraContent(
     ) {
         // Full screen Viewfinder
         AndroidView(
-            factory = { previewView },
+            factory = {
+                Log.d(TAG, "[CameraDebug] Preview attached")
+                previewView
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {

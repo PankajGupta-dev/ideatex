@@ -495,14 +495,18 @@ fun MediaPreviewScreen(
                                 try {
                                     val finalUri: Uri = if (mediaType == "video") {
                                         // Dynamic Video Trimming and Compression
-                                        MediaCompressor.compressVideo(
+                                        Log.d("MediaDebug", "[MediaDebug] Compression started")
+                                        val compressed = MediaCompressor.compressVideo(
                                             context = context,
                                             uri = mediaUri,
                                             startTimeMs = startTimeTrimMs,
                                             endTimeMs = endTimeTrimMs
                                         )
+                                        Log.d("MediaDebug", "[MediaDebug] Compression success")
+                                        compressed
                                     } else {
                                         // Save drawing canvas & overlays to image
+                                        Log.d("MediaDebug", "[MediaDebug] Compression started")
                                         val compiledBitmap = compileImageWithOverlays(
                                             context,
                                             originalBitmap!!,
@@ -520,7 +524,9 @@ fun MediaPreviewScreen(
                                         }
 
                                         // Compress saved copy
-                                        MediaCompressor.compressImage(context, Uri.fromFile(tempFile))
+                                        val compressed = MediaCompressor.compressImage(context, Uri.fromFile(tempFile))
+                                        Log.d("MediaDebug", "[MediaDebug] Compression success")
+                                        compressed
                                     }
 
                                     onSend(finalUri, captionText)

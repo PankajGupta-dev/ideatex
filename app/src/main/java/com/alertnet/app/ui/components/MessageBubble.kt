@@ -1,5 +1,7 @@
 package com.alertnet.app.ui.components
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -12,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -23,6 +26,7 @@ import com.alertnet.app.model.TransferProgress
 import com.alertnet.app.model.LocationSharePayload
 import com.alertnet.app.ui.theme.*
 import kotlinx.serialization.json.Json
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -84,13 +88,78 @@ fun MessageBubble(
             // ─── Content by message type ──────────────────────
             when (message.type) {
                 MessageType.IMAGE -> {
-                    // Inline image preview
+                    val context = LocalContext.current
+                    val parts = message.fileName?.split("|")
+                    val cleanFileName = parts?.getOrNull(0) ?: message.fileName
+                    val caption = parts?.getOrNull(1)
+
                     ImagePreviewBubble(
                         filePath = mediaFilePath,
-                        fileName = message.fileName,
+                        fileName = cleanFileName,
                         isSentByMe = isSentByMe,
-                        transferProgress = transferProgress
+                        transferProgress = transferProgress,
+                        onImageClick = {
+                            mediaFilePath?.let { path ->
+                                val file = File(path)
+                                if (file.exists()) {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(Uri.fromFile(file), "image/*")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        }
                     )
+
+                    if (!caption.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = caption,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+
+                MessageType.VIDEO -> {
+                    val context = LocalContext.current
+                    val parts = message.fileName?.split("|")
+                    val cleanFileName = parts?.getOrNull(0) ?: message.fileName
+                    val caption = parts?.getOrNull(1)
+
+                    VideoPreviewBubble(
+                        filePath = mediaFilePath,
+                        fileName = cleanFileName,
+                        isSentByMe = isSentByMe,
+                        transferProgress = transferProgress,
+                        onPlayClick = {
+                            mediaFilePath?.let { path ->
+                                val file = File(path)
+                                if (file.exists()) {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(Uri.fromFile(file), "video/*")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        }
+                    )
+
+                    if (!caption.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = caption,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary
+                        )
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 

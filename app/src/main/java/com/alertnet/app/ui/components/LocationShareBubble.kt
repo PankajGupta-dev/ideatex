@@ -14,14 +14,27 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.alertnet.app.model.LocationSharePayload
 import com.alertnet.app.ui.theme.*
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
+import com.mapbox.geojson.Point
+import com.mapbox.mapboxsdk.Mapbox
+import com.mapbox.mapboxsdk.camera.CameraPosition
+import com.mapbox.mapboxsdk.geometry.LatLng
+import com.mapbox.mapboxsdk.maps.MapView
+import com.mapbox.mapboxsdk.maps.Style
+import com.mapbox.mapboxsdk.style.layers.CircleLayer
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory
+import com.mapbox.mapboxsdk.style.sources.GeoJsonSource
 
 /**
  * Chat bubble for LOCATION_SHARE messages.
  *
  * Renders:
  * - Location pin icon + label or "Shared Location"
+ * - Live mini MapLibre vector map showing coordinates (non-interactive, lightweight)
  * - Coordinate readout with accuracy
  * - Relative timestamp
  * - "View on Map" CTA button
@@ -40,7 +53,7 @@ fun LocationShareBubble(
 
     Column(
         modifier = Modifier
-            .widthIn(min = 200.dp, max = 280.dp)
+            .widthIn(min = 220.dp, max = 280.dp)
             .clip(
                 RoundedCornerShape(
                     topStart = 16.dp,
@@ -70,7 +83,53 @@ fun LocationShareBubble(
             )
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
+
+        // actual offline MapLibre preview card
+        AndroidView(
+            factory = { context ->
+                Mapbox.getInstance(context)
+                MapView(context).also { mapView ->
+                    mapView.onCreate(null)
+                    mapView.getMapAsync { map ->
+                        // Disable all interactions to act purely as a preview
+                        map.uiSettings.isLogoEnabled = false
+                        map.uiSettings.isAttributionEnabled = false
+                        map.uiSettings.isZoomGesturesEnabled = false
+                        map.uiSettings.isScrollGesturesEnabled = false
+                        map.uiSettings.isTiltGesturesEnabled = false
+                        map.uiSettings.isRotateGesturesEnabled = false
+
+                        val target = LatLng(payload.lat, payload.lon)
+                        map.cameraPosition = CameraPosition.Builder()
+                            .target(target)
+                            .zoom(13.0)
+                            .build()
+
+                        map.setStyle(Style.Builder().fromUri("asset://map_style.json")) { style ->
+                            style.addSource(GeoJsonSource("mini-pin-source"))
+                            style.addLayer(
+                                CircleLayer("mini-pin-layer", "mini-pin-source").withProperties(
+                                    PropertyFactory.circleRadius(6f),
+                                    PropertyFactory.circleColor("#EF4444"), // red marker
+                                    PropertyFactory.circleStrokeWidth(1.5f),
+                                    PropertyFactory.circleStrokeColor("#FFFFFF")
+                                )
+                            )
+                            val feature = Feature.fromGeometry(Point.fromLngLat(payload.lon, payload.lat))
+                            (style.getSource("mini-pin-source") as? GeoJsonSource)
+                                ?.setGeoJson(FeatureCollection.fromFeature(feature))
+                        }
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(100.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+
+        Spacer(Modifier.height(8.dp))
 
         // Coordinates
         Text(

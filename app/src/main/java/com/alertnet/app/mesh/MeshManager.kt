@@ -265,8 +265,21 @@ class MeshManager(
      *
      * Uses [FileTransferManager] for efficient chunked transfer (no base64).
      */
-    suspend fun sendImage(targetId: String?, uri: Uri): MeshMessage? {
-        val result = fileTransferManager.sendFile(targetId, uri, MessageType.IMAGE)
+    suspend fun sendImage(targetId: String?, uri: Uri, caption: String? = null): MeshMessage? {
+        val result = fileTransferManager.sendFile(targetId, uri, MessageType.IMAGE, caption)
+        if (result != null) {
+            deduplicationManager.markSeen(result.id)
+            if (targetId != null) ackTracker.expectAck(result.id)
+            updateStats()
+        }
+        return result
+    }
+
+    /**
+     * Send a video to a specific peer using streaming binary transfer.
+     */
+    suspend fun sendVideo(targetId: String?, uri: Uri, caption: String? = null): MeshMessage? {
+        val result = fileTransferManager.sendFile(targetId, uri, MessageType.VIDEO, caption)
         if (result != null) {
             deduplicationManager.markSeen(result.id)
             if (targetId != null) ackTracker.expectAck(result.id)
@@ -296,7 +309,11 @@ class MeshManager(
      */
     suspend fun sendFile(targetId: String?, uri: Uri): MeshMessage? {
         val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
-        val type = if (mimeType.startsWith("image/")) MessageType.IMAGE else MessageType.FILE
+        val type = when {
+            mimeType.startsWith("image/") -> MessageType.IMAGE
+            mimeType.startsWith("video/") -> MessageType.VIDEO
+            else -> MessageType.FILE
+        }
         val result = fileTransferManager.sendFile(targetId, uri, type)
         if (result != null) {
             deduplicationManager.markSeen(result.id)

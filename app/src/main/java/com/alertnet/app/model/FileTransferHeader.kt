@@ -32,5 +32,7 @@ data class FileTransferHeader(
     /** Total number of chunks = ceil(fileSize / chunkSize) */
     val totalChunks: Int,
     /** Message type: IMAGE, FILE, or VOICE */
-    val messageType: MessageType
+    val messageType: MessageType,
+    /** Optional caption for images or videos */
+    val caption: String? = null
 )

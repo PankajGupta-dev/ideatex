@@ -69,7 +69,8 @@ class FileTransferManager(
     suspend fun sendFile(
         targetId: String?,
         uri: Uri,
-        type: MessageType
+        type: MessageType,
+        caption: String? = null
     ): MeshMessage? = withContext(Dispatchers.IO) {
         try {
             if (targetId == null) {
@@ -135,17 +136,19 @@ class FileTransferManager(
                 fileSize = verifiedSize,
                 chunkSize = CHUNK_SIZE,
                 totalChunks = totalChunks,
-                messageType = type
+                messageType = type,
+                caption = caption
             )
 
             // Create MeshMessage record (payload = local filename, not base64)
+            val dbFileName = if (!caption.isNullOrBlank()) "$fileName|$caption" else fileName
             val message = MeshMessage(
                 id = messageId,
                 senderId = deviceId,
                 targetId = targetId,
                 type = type,
                 payload = fileName,
-                fileName = fileName,
+                fileName = dbFileName,
                 mimeType = mimeType,
                 timestamp = System.currentTimeMillis(),
                 ttl = 3,
@@ -380,13 +383,14 @@ class FileTransferManager(
             }
 
             // Create message record
+            val dbFileName = if (!header.caption.isNullOrBlank()) "${header.fileName}|${header.caption}" else header.fileName
             val message = MeshMessage(
                 id = header.messageId,
                 senderId = header.senderId,
                 targetId = header.targetId,
                 type = header.messageType,
                 payload = header.fileName,
-                fileName = header.fileName,
+                fileName = dbFileName,
                 mimeType = header.mimeType,
                 timestamp = System.currentTimeMillis(),
                 ttl = 3,

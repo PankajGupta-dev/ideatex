@@ -11,6 +11,8 @@ enum class MessageType {
     TEXT,
     /** Image attachment (payload contains base64-encoded image) */
     IMAGE,
+    /** Video attachment (payload contains local file path or base64) */
+    VIDEO,
     /** File attachment (payload contains base64-encoded file) */
     FILE,
     /** Voice recording (payload contains local file path) */

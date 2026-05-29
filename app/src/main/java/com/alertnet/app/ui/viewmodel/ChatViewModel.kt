@@ -146,23 +146,42 @@ class ChatViewModel(
         }
     }
 
-    // ─── Send Image ──────────────────────────────────────────────
+    // ─── Send Image & Video ──────────────────────────────────────
 
     /**
-     * Send an image from gallery to the current peer.
+     * Send an image from gallery/camera to the current peer.
      */
-    fun sendImage(uri: Uri) {
+    fun sendImage(uri: Uri, caption: String? = null) {
         val peerId = currentPeerId
 
         _sendingState.value = SendingState.Sending
 
         viewModelScope.launch {
             try {
-                meshManager.sendImage(peerId, uri)
+                meshManager.sendImage(peerId, uri, caption)
                 refreshMessages()
                 _sendingState.value = SendingState.Idle
             } catch (e: Exception) {
                 _sendingState.value = SendingState.Error(e.message ?: "Image send failed")
+            }
+        }
+    }
+
+    /**
+     * Send a video from gallery/camera to the current peer.
+     */
+    fun sendVideo(uri: Uri, caption: String? = null) {
+        val peerId = currentPeerId
+
+        _sendingState.value = SendingState.Sending
+
+        viewModelScope.launch {
+            try {
+                meshManager.sendVideo(peerId, uri, caption)
+                refreshMessages()
+                _sendingState.value = SendingState.Idle
+            } catch (e: Exception) {
+                _sendingState.value = SendingState.Error(e.message ?: "Video send failed")
             }
         }
     }
@@ -302,7 +321,14 @@ class ChatViewModel(
         return when (message.type) {
             MessageType.TEXT -> meshManager.decryptPayload(message.payload)
             MessageType.ACK -> "✓ Delivered"
-            MessageType.IMAGE -> message.fileName ?: "Image"
+            MessageType.IMAGE -> {
+                val parts = message.fileName?.split("|")
+                parts?.getOrNull(1) ?: "Image"
+            }
+            MessageType.VIDEO -> {
+                val parts = message.fileName?.split("|")
+                parts?.getOrNull(1) ?: "Video"
+            }
             MessageType.VOICE -> formatDuration(message)
             MessageType.LOCATION_SHARE -> "📍 Location"
             else -> message.fileName ?: "File"

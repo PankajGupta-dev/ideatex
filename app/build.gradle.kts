@@ -76,6 +76,13 @@ dependencies {
     // MapLibre (offline maps)
     implementation("org.maplibre.gl:android-sdk:10.3.0")
 
+    // CameraX
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.video)
+    implementation(libs.androidx.camera.view)
+
     // Legacy (kept for transition)
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")

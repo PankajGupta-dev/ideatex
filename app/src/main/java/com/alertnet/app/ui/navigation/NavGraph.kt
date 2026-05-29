@@ -154,7 +154,20 @@ fun NavGraph(app: AlertNetApplication) {
                     },
                     confirmButton = {
                         Button(
-                            onClick = { sosAlert = null },
+                            onClick = {
+                                val regex = Regex("""Location:\s*([-\d.]+)\s*,\s*([-\d.]+)""")
+                                val match = regex.find(msg.payload)
+                                val lat = match?.groupValues?.getOrNull(1)
+                                val lon = match?.groupValues?.getOrNull(2)
+                                sosAlert = null
+                                if (lat != null && lon != null) {
+                                    navController.navigate(
+                                        "mesh_map?focusLat=$lat&focusLon=$lon&pinType=${msg.senderId}"
+                                    )
+                                } else {
+                                    navController.navigate("mesh_map")
+                                }
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = StatusFailed
                             )
@@ -211,7 +224,7 @@ fun NavGraph(app: AlertNetApplication) {
                 onBack = { navController.popBackStack() },
                 onViewOnMap = { lat, lon ->
                     navController.navigate(
-                        "mesh_map?focusLat=$lat&focusLon=$lon&pinType=SHARED_LOCATION"
+                        "mesh_map?focusLat=$lat&focusLon=$lon&pinType=$peerId"
                     )
                 }
             )

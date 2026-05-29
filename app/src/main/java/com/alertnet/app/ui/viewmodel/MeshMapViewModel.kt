@@ -2,6 +2,7 @@ package com.alertnet.app.ui.viewmodel
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.util.Log
 import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -56,9 +57,7 @@ class MeshMapViewModel(
 
     init {
         checkConsentState()
-        if (settingsRepository.isLocalMapLocationEnabled) {
-            fetchSelfLocation()
-        }
+        startLocationUpdates()
     }
 
     private fun checkConsentState() {
@@ -74,7 +73,7 @@ class MeshMapViewModel(
             settingsRepository.setMeshLocationBroadcast(true)
             settingsRepository.setHasShownLocationConsent(true)
             _showConsentDialog.value = false
-            fetchSelfLocation()
+            // startLocationUpdates loop will automatically fetch location
         }
     }
 
@@ -87,31 +86,38 @@ class MeshMapViewModel(
     }
 
     @SuppressLint("MissingPermission")
-    private fun fetchSelfLocation() {
-        val fusedClient = LocationServices.getFusedLocationProviderClient(appContext)
+    private fun startLocationUpdates() {
+        viewModelScope.launch {
+            val fusedClient = LocationServices.getFusedLocationProviderClient(appContext)
+            val request = CurrentLocationRequest.Builder()
+                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                .setMaxUpdateAgeMillis(1000)
+                .setDurationMillis(3000)
+                .build()
 
-        val request = CurrentLocationRequest.Builder()
-            .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
-            .setMaxUpdateAgeMillis(TimeUnit.MINUTES.toMillis(2))
-            .setDurationMillis(TimeUnit.SECONDS.toMillis(10))
-            .build()
-
-        fusedClient.getCurrentLocation(request, cancellationTokenSource.token)
-            .addOnSuccessListener { location ->
-                if (location != null) {
-                    _selfLocation.value = location
-                } else {
-                    // Fallback to last known
-                    fusedClient.lastLocation.addOnSuccessListener { last ->
-                        _selfLocation.value = last
-                    }
+            while (isActive) {
+                // Map is active — always request fresh GPS lock to draw live navigation lines
+                try {
+                    fusedClient.getCurrentLocation(request, cancellationTokenSource.token)
+                        .addOnSuccessListener { location ->
+                            if (location != null) {
+                                _selfLocation.value = location
+                            } else {
+                                fusedClient.lastLocation.addOnSuccessListener { last ->
+                                    if (last != null) {
+                                        _selfLocation.value = last
+                                    }
+                                }
+                            }
+                        }
+                } catch (e: SecurityException) {
+                    Log.e("MeshMapViewModel", "Location permissions missing", e)
+                } catch (e: Exception) {
+                    Log.e("MeshMapViewModel", "Error fetching self location", e)
                 }
+                delay(3000)
             }
-            .addOnFailureListener {
-                fusedClient.lastLocation.addOnSuccessListener { last ->
-                    _selfLocation.value = last
-                }
-            }
+        }
     }
 
     override fun onCleared() {

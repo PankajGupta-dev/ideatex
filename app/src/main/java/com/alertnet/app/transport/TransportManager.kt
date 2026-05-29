@@ -120,6 +120,11 @@ class TransportManager(
      */
     suspend fun broadcastToAll(data: ByteArray, exclude: Set<String> = emptySet()) {
         wifiDirectTransport.broadcastMessage(data, exclude)
+        // Also broadcast via BLE if the payload size fits the BLE MTU limit,
+        // reaching nearby phones that are discovered but not currently in a WiFi P2P group.
+        if (data.size <= com.alertnet.app.transport.ble.BleConstants.MAX_BLE_PAYLOAD) {
+            bleTransport.broadcastMessage(data, exclude)
+        }
     }
 
     // ─── Helpers ─────────────────────────────────────────────────

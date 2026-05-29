@@ -21,6 +21,7 @@ import com.alertnet.app.ui.theme.*
 import com.alertnet.app.ui.viewmodel.MeshMapViewModel
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
+import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
 import com.mapbox.mapboxsdk.Mapbox
 import com.mapbox.mapboxsdk.camera.CameraPosition
@@ -29,6 +30,8 @@ import com.mapbox.mapboxsdk.maps.MapView
 import com.mapbox.mapboxsdk.maps.MapboxMap
 import com.mapbox.mapboxsdk.maps.Style
 import com.mapbox.mapboxsdk.style.layers.CircleLayer
+import com.mapbox.mapboxsdk.style.layers.LineLayer
+import com.mapbox.mapboxsdk.style.layers.Property
 import com.mapbox.mapboxsdk.style.layers.PropertyFactory
 import com.mapbox.mapboxsdk.style.sources.GeoJsonSource
 
@@ -188,8 +191,19 @@ fun MeshMapScreen(
                                     )
                                 )
 
-                                // If navigated from "View on Map" CTA
-                                if (focusLat != null && focusLon != null && pinType == "SHARED_LOCATION") {
+                                // Route path (neon green line)
+                                style.addSource(GeoJsonSource("route-source"))
+                                style.addLayer(
+                                    LineLayer("route-layer", "route-source").withProperties(
+                                        PropertyFactory.lineColor("#00E676"),
+                                        PropertyFactory.lineWidth(5f),
+                                        PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                                        PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
+                                    )
+                                )
+
+                                // If navigated from "View on Map" CTA or SOS with focus coordinates
+                                if (focusLat != null && focusLon != null && pinType != null) {
                                     val feature = Feature.fromGeometry(
                                         Point.fromLngLat(focusLon, focusLat)
                                     )
@@ -218,6 +232,24 @@ fun MeshMapScreen(
                     (style.getSource("peers-source") as? GeoJsonSource)
                         ?.setGeoJson(FeatureCollection.fromFeatures(peerFeatures))
 
+                    // Update shared/target pin based on whether a peer is live or static fallback
+                    var targetLat = focusLat
+                    var targetLon = focusLon
+
+                    if (pinType != null && pinType != "SHARED_LOCATION") {
+                        val matchingPeer = peers.find { it.deviceId == pinType || it.alertnetId == pinType }
+                        if (matchingPeer != null && matchingPeer.latitude != null && matchingPeer.longitude != null) {
+                            targetLat = matchingPeer.latitude
+                            targetLon = matchingPeer.longitude
+                        }
+                    }
+
+                    if (targetLat != null && targetLon != null) {
+                        val feature = Feature.fromGeometry(Point.fromLngLat(targetLon, targetLat))
+                        (style.getSource("shared-pin-source") as? GeoJsonSource)
+                            ?.setGeoJson(FeatureCollection.fromFeature(feature))
+                    }
+
                     // Update self marker
                     selfLocation?.let { loc ->
                         val selfFeature = Feature.fromGeometry(
@@ -225,6 +257,17 @@ fun MeshMapScreen(
                         )
                         (style.getSource("self-source") as? GeoJsonSource)
                             ?.setGeoJson(FeatureCollection.fromFeature(selfFeature))
+
+                        // Update route path if we have a target
+                        if (targetLat != null && targetLon != null) {
+                            val points = listOf(
+                                Point.fromLngLat(loc.longitude, loc.latitude),
+                                Point.fromLngLat(targetLon, targetLat)
+                            )
+                            val lineString = LineString.fromLngLats(points)
+                            (style.getSource("route-source") as? GeoJsonSource)
+                                ?.setGeoJson(FeatureCollection.fromFeature(Feature.fromGeometry(lineString)))
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -242,8 +285,8 @@ fun MeshMapScreen(
                 Column(modifier = Modifier.padding(10.dp)) {
                     LegendItem(color = MeshGreen, label = "You")
                     LegendItem(color = MeshBlue, label = "Mesh Peers")
-                    if (pinType == "SHARED_LOCATION") {
-                        LegendItem(color = StatusFailed, label = "Shared Location")
+                    if (pinType != null) {
+                        LegendItem(color = StatusFailed, label = "Target Location")
                     }
                 }
             }

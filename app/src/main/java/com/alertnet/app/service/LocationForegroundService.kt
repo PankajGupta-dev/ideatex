@@ -69,19 +69,19 @@ class LocationForegroundService : LifecycleService() {
         fun getService(): LocationForegroundService = this@LocationForegroundService
     }
 
-    // Battery-conscious periodic location request.
-    // PRIORITY_BALANCED_POWER_ACCURACY: uses cell/WiFi when available, falls back to GPS.
-    // 50m displacement gate: no update if device hasn't moved — single biggest battery saving.
-    // 5-minute interval: location data that old is still useful on a mesh map.
+    // Offline-friendly high-accuracy periodic location request.
+    // PRIORITY_HIGH_ACCURACY: forces physical GPS hardware satellite lock (vital offline).
+    // 0m displacement gate: updates continuously so path tracing in navigations is real-time.
+    // 5-second interval: keeps location fresh for live map and routing.
     private val periodicRequest = LocationRequest.Builder(
-        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
-        TimeUnit.MINUTES.toMillis(5)
+        Priority.PRIORITY_HIGH_ACCURACY,
+        TimeUnit.SECONDS.toMillis(5)
     ).apply {
-        setMinUpdateIntervalMillis(TimeUnit.MINUTES.toMillis(1))
-        setMinUpdateDistanceMeters(50f)
+        setMinUpdateIntervalMillis(TimeUnit.SECONDS.toMillis(3))
+        setMinUpdateDistanceMeters(0f)
         setGranularity(Granularity.GRANULARITY_PERMISSION_LEVEL)
-        setWaitForAccurateLocation(false)
-        setMaxUpdateDelayMillis(TimeUnit.MINUTES.toMillis(10))
+        setWaitForAccurateLocation(true)
+        setMaxUpdateDelayMillis(TimeUnit.SECONDS.toMillis(5))
     }.build()
 
     private val periodicCallback = object : LocationCallback() {

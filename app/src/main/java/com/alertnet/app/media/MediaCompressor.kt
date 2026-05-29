@@ -94,14 +94,23 @@ object MediaCompressor {
         onProgress: (Float) -> Unit = {}
     ): Uri = withContext(Dispatchers.IO) {
         try {
+            Log.d("VideoDebug", "[VideoDebug] Compression started")
             val contentResolver = context.contentResolver
             val cacheFile = File(context.cacheDir, "TRIMMED_COMPRESSED_${System.currentTimeMillis()}.mp4")
 
             // Retrieve video metadata
             val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, uri)
+            if (uri.scheme == "file") {
+                val f = File(uri.path ?: "")
+                if (!f.exists()) {
+                    throw Exception("Video file missing")
+                }
+                retriever.setDataSource(f.absolutePath)
+            } else {
+                retriever.setDataSource(context, uri)
+            }
             val durationMsStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            val durationMs = durationMsStr?.toLongOrNull() ?: 0L
+            val durationMs = durationMsStr?.toLongOrNull()?.takeIf { it > 0 } ?: 30000L
             val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 1280
             val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 720
             retriever.release()
@@ -114,9 +123,17 @@ object MediaCompressor {
 
             // Setup extractor
             val extractor = MediaExtractor()
-            val pfd = contentResolver.openFileDescriptor(uri, "r") ?: throw Exception("Failed to open video FD")
-            extractor.setDataSource(pfd.fileDescriptor)
-
+            if (uri.scheme == "file") {
+                val file = File(uri.path ?: "")
+                if (!file.exists()) {
+                    throw Exception("Video file missing")
+                }
+                extractor.setDataSource(file.absolutePath)
+            } else {
+                contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    extractor.setDataSource(pfd.fileDescriptor)
+                } ?: throw Exception("Failed to open video FD")
+            }
             val muxer = MediaMuxer(cacheFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             val trackCount = extractor.trackCount
             val trackMap = HashMap<Int, Int>()
@@ -179,9 +196,11 @@ object MediaCompressor {
             muxer.stop()
             muxer.release()
             extractor.release()
-            pfd.close()
 
             Log.d(TAG, "Video trimming/compression complete: ${cacheFile.length()} bytes")
+            Log.d("VideoDebug", "[VideoDebug] Compression completed")
+            Log.d("VideoDebug", "[VideoDebug] Compressed file path = ${cacheFile.absolutePath}")
+            Log.d("VideoDebug", "[VideoDebug] Compressed file exists = ${cacheFile.exists()}")
             Uri.fromFile(cacheFile)
         } catch (e: Exception) {
             Log.e(TAG, "Error trimming/compressing video: ${e.message}", e)

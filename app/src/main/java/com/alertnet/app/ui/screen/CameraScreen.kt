@@ -480,36 +480,43 @@ private fun CameraContent(
                                 }
                             },
                             onLongPress = {
-                                // Long press to start video recording
-                                isRecordingVideo = true
-                                val outputFile = File(context.cacheDir, "REC_${System.currentTimeMillis()}.mp4")
-                                val outputOptions = FileOutputOptions.Builder(outputFile).build()
-                                
-                                @SuppressLint("MissingPermission")
-                                val recording = videoCapture.output
-                                    .prepareRecording(context, outputOptions)
-                                    .apply {
-                                        if (hasAudio) withAudioEnabled()
-                                    }
-                                    .start(ContextCompat.getMainExecutor(context)) { event ->
-                                        if (event is VideoRecordEvent.Status) {
-                                            val bytes = event.recordingStats.numBytesRecorded
-                                            if (bytes >= 15 * 1024 * 1024) { // 15 MB Size Limit
-                                                activeRecording?.stop()
-                                                activeRecording = null
-                                                isRecordingVideo = false
-                                                android.widget.Toast.makeText(context, "Maximum video size reached (15MB)", android.widget.Toast.LENGTH_LONG).show()
-                                            }
-                                        }
-                                        if (event is VideoRecordEvent.Finalize) {
-                                            isRecordingVideo = false
-                                            if (!event.hasError()) {
-                                                onMediaCaptured(Uri.fromFile(outputFile), "video")
-                                            } else {
-                                                Log.e(TAG, "Video capture failed: ${event.error}")
-                                            }
-                                        }
-                                    }
+                                 // Long press to start video recording
+                                 Log.d("VideoDebug", "[VideoDebug] Recording started")
+                                 isRecordingVideo = true
+                                 val outputFile = File(context.cacheDir, "REC_${System.currentTimeMillis()}.mp4")
+                                 val outputOptions = FileOutputOptions.Builder(outputFile).build()
+                                 
+                                 @SuppressLint("MissingPermission")
+                                 val recording = videoCapture.output
+                                     .prepareRecording(context, outputOptions)
+                                     .apply {
+                                         if (hasAudio) withAudioEnabled()
+                                     }
+                                     .start(ContextCompat.getMainExecutor(context)) { event ->
+                                         if (event is VideoRecordEvent.Status) {
+                                             val bytes = event.recordingStats.numBytesRecorded
+                                             if (bytes >= 15 * 1024 * 1024) { // 15 MB Size Limit
+                                                 activeRecording?.stop()
+                                                 activeRecording = null
+                                                 isRecordingVideo = false
+                                                 android.widget.Toast.makeText(context, "Maximum video size reached (15MB)", android.widget.Toast.LENGTH_LONG).show()
+                                             }
+                                         }
+                                         if (event is VideoRecordEvent.Finalize) {
+                                             isRecordingVideo = false
+                                             if (!event.hasError()) {
+                                                 val fileUri = Uri.fromFile(outputFile)
+                                                 Log.d("VideoDebug", "[VideoDebug] Recording completed")
+                                                 Log.d("VideoDebug", "[VideoDebug] File path = ${outputFile.absolutePath}")
+                                                 Log.d("VideoDebug", "[VideoDebug] File exists = ${outputFile.exists()}")
+                                                 Log.d("VideoDebug", "[VideoDebug] File size = ${String.format(java.util.Locale.US, "%.1f", outputFile.length() / (1024f * 1024f))}MB")
+                                                 Log.d("VideoDebug", "[VideoDebug] MIME type = video/mp4")
+                                                 onMediaCaptured(fileUri, "video")
+                                             } else {
+                                                 Log.e(TAG, "Video capture failed: ${event.error}")
+                                             }
+                                         }
+                                     }
                                 activeRecording = recording
                             },
                             onPress = {

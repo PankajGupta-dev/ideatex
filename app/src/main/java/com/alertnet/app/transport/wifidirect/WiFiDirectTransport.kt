@@ -685,15 +685,26 @@ class WiFiDirectTransport(
             outputStream.writeInt(header.size)
             outputStream.write(header)
 
+            val isVideo = String(header, Charsets.UTF_8).contains("\"messageType\":\"VIDEO\"")
+            if (isVideo) {
+                Log.d("VideoDebug", "[VideoDebug] Socket connected")
+            }
+
             // Stream file in chunks
             val buffer = ByteArray(65536) // 64KB chunks
             var totalSent = 0L
+            var chunkIndex = 0
+            val totalChunks = ((fileSize + 65535) / 65536).toInt()
 
             while (totalSent < fileSize) {
                 val read = fileStream.read(buffer)
                 if (read == -1) break
                 outputStream.write(buffer, 0, read)
                 totalSent += read
+                chunkIndex++
+                if (isVideo) {
+                    Log.d("VideoDebug", "[VideoDebug] Sending chunk $chunkIndex/$totalChunks")
+                }
                 onProgress(totalSent)
             }
 
@@ -715,6 +726,9 @@ class WiFiDirectTransport(
             Thread.sleep(100)
             socket.close()
 
+            if (isVideo) {
+                Log.d("VideoDebug", "[VideoDebug] Transfer completed")
+            }
             Log.d(TAG, "Binary transfer complete: $totalSent bytes to $peerId")
             true
         } catch (e: Exception) {

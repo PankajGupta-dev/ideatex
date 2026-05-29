@@ -122,19 +122,37 @@ fun MediaPreviewScreen(
 
     // Load original metadata asynchronously
     LaunchedEffect(mediaUri) {
+        Log.d("VideoDebug", "[VideoDebug] Preview screen opened")
+        Log.d("VideoDebug", "[VideoDebug] Video URI valid = ${mediaUri.toString().isNotEmpty()}")
         withContext(Dispatchers.IO) {
             try {
                 if (mediaType == "video") {
                     val retriever = MediaMetadataRetriever()
-                    retriever.setDataSource(context, mediaUri)
+                    val isFile = mediaUri.scheme == "file"
+                    if (isFile) {
+                        val file = File(mediaUri.path ?: "")
+                        if (!file.exists()) {
+                            throw Exception("Video file missing")
+                        }
+                        retriever.setDataSource(file.absolutePath)
+                    } else {
+                        retriever.setDataSource(context, mediaUri)
+                    }
                     val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                     videoDurationMs = durStr?.toLongOrNull() ?: 0L
                     endTimeTrimMs = Math.min(videoDurationMs, 30000L) // Default trim to max 30s
                     retriever.release()
 
-                    context.contentResolver.openFileDescriptor(mediaUri, "r")?.use { pfd ->
-                        videoSizeInBytes = pfd.statSize
+                    val isFileScheme = mediaUri.scheme == "file"
+                    if (isFileScheme) {
+                        val file = File(mediaUri.path ?: "")
+                        videoSizeInBytes = file.length()
+                    } else {
+                        context.contentResolver.openFileDescriptor(mediaUri, "r")?.use { pfd ->
+                            videoSizeInBytes = pfd.statSize
+                        }
                     }
+                    Log.d("VideoDebug", "[VideoDebug] Selected media loaded")
                 } else {
                     context.contentResolver.openInputStream(mediaUri)?.use { stream ->
                         originalBitmap = BitmapFactory.decodeStream(stream)
@@ -415,6 +433,7 @@ fun MediaPreviewScreen(
                                         // Loop inside selected trim points dynamically
                                         mediaPlayer.seekTo(startTimeTrimMs.toInt())
                                         start()
+                                        Log.d("VideoDebug", "[VideoDebug] ExoPlayer preview success")
                                     }
                                 }
                             },
@@ -490,19 +509,30 @@ fun MediaPreviewScreen(
                         onClick = {
                             if (isCompressing) return@FilledIconButton
                             isCompressing = true
+                            Log.d("VideoDebug", "[VideoDebug] Send button clicked")
+                            Log.d("VideoDebug", "[VideoDebug] Selected video path = ${mediaUri.path}")
 
                             coroutineScope.launch {
                                 try {
                                     val finalUri: Uri = if (mediaType == "video") {
                                         // Dynamic Video Trimming and Compression
-                                        Log.d("MediaDebug", "[MediaDebug] Compression started")
+                                        Log.d("VideoDebug", "[VideoDebug] Compression started")
                                         val compressed = MediaCompressor.compressVideo(
                                             context = context,
                                             uri = mediaUri,
                                             startTimeMs = startTimeTrimMs,
                                             endTimeMs = endTimeTrimMs
                                         )
-                                        Log.d("MediaDebug", "[MediaDebug] Compression success")
+                                        
+                                        // File existence check & path conversion validation
+                                        val compFile = File(compressed.path ?: "")
+                                        if (!compFile.exists() || compFile.length() <= 0) {
+                                            throw Exception("Compression failed")
+                                        }
+                                        
+                                        Log.d("VideoDebug", "[VideoDebug] Compression completed")
+                                        Log.d("VideoDebug", "[VideoDebug] Compressed file path = ${compFile.absolutePath}")
+                                        Log.d("VideoDebug", "[VideoDebug] Compressed file exists = true")
                                         compressed
                                     } else {
                                         // Save drawing canvas & overlays to image
@@ -532,7 +562,14 @@ fun MediaPreviewScreen(
                                     onSend(finalUri, captionText)
                                 } catch (e: Exception) {
                                     Log.e("MediaPreviewScreen", "Failed to compile/compress media", e)
-                                    Toast.makeText(context, "Error sending media", Toast.LENGTH_SHORT).show()
+                                    val errorMsg = when {
+                                        e.message?.contains("missing", ignoreCase = true) == true -> "Video file missing"
+                                        e.message?.contains("compression", ignoreCase = true) == true -> "Compression failed"
+                                        e.message?.contains("uri", ignoreCase = true) == true -> "Invalid URI"
+                                        e.message?.contains("socket", ignoreCase = true) == true -> "Socket disconnected"
+                                        else -> e.message ?: "Error sending media"
+                                    }
+                                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
                                 } finally {
                                     isCompressing = false
                                 }

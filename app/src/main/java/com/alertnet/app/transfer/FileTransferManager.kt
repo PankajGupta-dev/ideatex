@@ -78,20 +78,33 @@ class FileTransferManager(
                 return@withContext null
             }
 
-            Log.d("MediaDebug", "[MediaDebug] Video selected")
-            Log.d("MediaDebug", "[MediaDebug] File path = ${uri.toString()}")
-
             val contentResolver = context.contentResolver
             val isFileScheme = uri.scheme == "file"
             val fileObj = if (isFileScheme) File(uri.path ?: "") else null
             
             val exists = if (isFileScheme) fileObj?.exists() == true else true
-            Log.d("MediaDebug", "[MediaDebug] File exists = $exists")
+            val readable = if (isFileScheme) fileObj?.canRead() == true else true
+            val ext = MimeTypeMap.getFileExtensionFromUrl(uri.toString()).ifEmpty { "mp4" }
+            val isValidUri = uri.toString().startsWith("content://") || uri.toString().startsWith("file://")
+
+            if (type == MessageType.VIDEO) {
+                Log.d("VideoDebug", "[VideoDebug] File validation started")
+                Log.d("VideoDebug", "[VideoDebug] Transfer preparation started")
+                Log.d("VideoDebug", "[VideoDebug] File exists = $exists")
+                Log.d("VideoDebug", "[VideoDebug] File readable = $readable")
+                Log.d("VideoDebug", "[VideoDebug] Extension = $ext")
+                Log.d("VideoDebug", "[VideoDebug] Valid content URI = $isValidUri")
+                Log.d("VideoDebug", "[VideoDebug] Local path resolved successfully: ${uri.path}")
+            } else {
+                Log.d("MediaDebug", "[MediaDebug] Video selected")
+                Log.d("MediaDebug", "[MediaDebug] File path = ${uri.toString()}")
+                Log.d("MediaDebug", "[MediaDebug] File exists = $exists")
+            }
 
             // Get file metadata
             val mimeType = if (isFileScheme) {
-                val ext = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
-                MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "video/mp4"
+                val extMap = MimeTypeMap.getFileExtensionFromUrl(uri.toString())
+                MimeTypeMap.getSingleton().getMimeTypeFromExtension(extMap) ?: "video/mp4"
             } else {
                 contentResolver.getType(uri) ?: "application/octet-stream"
             }
@@ -104,7 +117,11 @@ class FileTransferManager(
                 } ?: 0L
             }
 
-            Log.d("MediaDebug", "[MediaDebug] File size = ${fileSize / (1024f * 1024f)} MB")
+            if (type == MessageType.VIDEO) {
+                Log.d("VideoDebug", "[VideoDebug] File size = ${String.format(java.util.Locale.US, "%.1f", fileSize / (1024f * 1024f))}MB")
+            } else {
+                Log.d("MediaDebug", "[MediaDebug] File size = ${fileSize / (1024f * 1024f)} MB")
+            }
 
             if (fileSize > MAX_FILE_SIZE) {
                 Log.e(TAG, "File too large: $fileSize bytes (max: $MAX_FILE_SIZE)")
@@ -117,12 +134,18 @@ class FileTransferManager(
             }
 
             // Generate unique filename
-            val ext = MimeTypeMap.getSingleton()
+            val extension = MimeTypeMap.getSingleton()
                 .getExtensionFromMimeType(mimeType) ?: "bin"
-            val fileName = fileStorage.generateFileName(type, ext)
+            val fileName = fileStorage.generateFileName(type, extension)
             val messageId = UUID.randomUUID().toString()
             val transferId = UUID.randomUUID().toString()
             val totalChunks = ceil(fileSize.toDouble() / CHUNK_SIZE).toInt()
+
+            if (type == MessageType.VIDEO) {
+                Log.d("VideoDebug", "[VideoDebug] Generating chunks")
+                Log.d("VideoDebug", "[VideoDebug] Total chunks = $totalChunks")
+                Log.d("VideoDebug", "[VideoDebug] Chunk size = 64KB")
+            }
 
             // Save a local copy
             val localCopy = fileStorage.createFile(fileName)
@@ -182,7 +205,11 @@ class FileTransferManager(
                 status = DeliveryStatus.SENDING
             )
             repository.insertMessage(message)
-            Log.d("MediaDebug", "[MediaDebug] SQLite metadata saved")
+            if (type == MessageType.VIDEO) {
+                Log.d("VideoDebug", "[VideoDebug] SQLite metadata saved")
+            } else {
+                Log.d("MediaDebug", "[MediaDebug] SQLite metadata saved")
+            }
 
             // Initial progress
             updateProgress(transferId, messageId, 0, verifiedSize, TransferState.SENDING)
@@ -366,6 +393,9 @@ class FileTransferManager(
             val header = json.decodeFromString<FileTransferHeader>(String(headerBytes, Charsets.UTF_8))
 
             Log.d(TAG, "Receiving: ${header.fileName} (${header.fileSize} bytes) from $senderIP")
+            if (header.messageType == MessageType.VIDEO) {
+                Log.d("ReceiverDebug", "[ReceiverDebug] Receiving video chunks")
+            }
 
             // Validate
             if (header.fileSize > MAX_FILE_SIZE) {
@@ -410,6 +440,12 @@ class FileTransferManager(
                 Log.e(TAG, "FILE SIZE MISMATCH! expected=${header.fileSize} received=$received disk=$actualSize")
                 outputFile.delete()
                 return@withContext null
+            }
+
+            if (header.messageType == MessageType.VIDEO) {
+                Log.d("ReceiverDebug", "[ReceiverDebug] Chunks received successfully")
+                Log.d("ReceiverDebug", "[ReceiverDebug] File reconstructed")
+                Log.d("ReceiverDebug", "[ReceiverDebug] Video saved locally")
             }
 
             // Create message record

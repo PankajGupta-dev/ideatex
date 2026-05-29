@@ -158,9 +158,13 @@ class ChatViewModel(
 
         viewModelScope.launch {
             try {
-                meshManager.sendImage(peerId, uri, caption)
-                refreshMessages()
-                _sendingState.value = SendingState.Idle
+                val result = meshManager.sendImage(peerId, uri, caption)
+                if (result == null) {
+                    _sendingState.value = SendingState.Error("Image send failed")
+                } else {
+                    refreshMessages()
+                    _sendingState.value = SendingState.Idle
+                }
             } catch (e: Exception) {
                 _sendingState.value = SendingState.Error(e.message ?: "Image send failed")
             }
@@ -177,9 +181,13 @@ class ChatViewModel(
 
         viewModelScope.launch {
             try {
-                meshManager.sendVideo(peerId, uri, caption)
-                refreshMessages()
-                _sendingState.value = SendingState.Idle
+                val result = meshManager.sendVideo(peerId, uri, caption)
+                if (result == null) {
+                    _sendingState.value = SendingState.Error("Video send failed")
+                } else {
+                    refreshMessages()
+                    _sendingState.value = SendingState.Idle
+                }
             } catch (e: Exception) {
                 _sendingState.value = SendingState.Error(e.message ?: "Video send failed")
             }

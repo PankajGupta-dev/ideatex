@@ -92,6 +92,7 @@ fun MediaPreviewScreen(
 
     var captionText by remember { mutableStateOf("") }
     var isCompressing by remember { mutableStateOf(false) }
+    var isMetadataLoaded by remember { mutableStateOf(mediaType != "video") } // Images don't need async metadata
 
     // Image Editor States
     var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -153,6 +154,7 @@ fun MediaPreviewScreen(
                         }
                     }
                     Log.d("VideoDebug", "[VideoDebug] Selected media loaded")
+                    isMetadataLoaded = true
                 } else {
                     context.contentResolver.openInputStream(mediaUri)?.use { stream ->
                         originalBitmap = BitmapFactory.decodeStream(stream)
@@ -507,7 +509,7 @@ fun MediaPreviewScreen(
                     // Send Button
                     FilledIconButton(
                         onClick = {
-                            if (isCompressing) return@FilledIconButton
+                            if (isCompressing || (mediaType == "video" && !isMetadataLoaded)) return@FilledIconButton
                             isCompressing = true
                             Log.d("VideoDebug", "[VideoDebug] Send button clicked")
                             Log.d("VideoDebug", "[VideoDebug] Selected video path = ${mediaUri.path}")
@@ -515,25 +517,40 @@ fun MediaPreviewScreen(
                             coroutineScope.launch {
                                 try {
                                     val finalUri: Uri = if (mediaType == "video") {
+                                        // Safety: ensure trim window is valid before compression
+                                        val safeEndTrimMs = if (endTimeTrimMs <= startTimeTrimMs) {
+                                            Log.w("VideoDebug", "[VideoDebug] Send clicked with zero trim window. Using full duration.")
+                                            Math.min(if (videoDurationMs > 0) videoDurationMs else 30000L, 30000L)
+                                        } else {
+                                            endTimeTrimMs
+                                        }
+                                        
                                         // Dynamic Video Trimming and Compression
-                                        Log.d("VideoDebug", "[VideoDebug] Compression started")
+                                        Log.d("VideoDebug", "[VideoDebug] Compressing with startMs=$startTimeTrimMs endMs=$safeEndTrimMs")
                                         val compressed = MediaCompressor.compressVideo(
                                             context = context,
                                             uri = mediaUri,
                                             startTimeMs = startTimeTrimMs,
-                                            endTimeMs = endTimeTrimMs
+                                            endTimeMs = safeEndTrimMs
                                         )
                                         
                                         // File existence check & path conversion validation
                                         val compFile = File(compressed.path ?: "")
-                                        if (!compFile.exists() || compFile.length() <= 0) {
-                                            throw Exception("Compression failed")
+                                        if (!compFile.exists() || compFile.length() < 1024) {
+                                            // Compressed file is missing or too small (empty container).
+                                            // Fall back to the original recording file.
+                                            Log.w("VideoDebug", "[VideoDebug] Compressed file invalid (exists=${compFile.exists()}, size=${compFile.length()}). Using original recording.")
+                                            val origFile = File(mediaUri.path ?: "")
+                                            if (!origFile.exists() || origFile.length() <= 0) {
+                                                throw Exception("Video file missing")
+                                            }
+                                            mediaUri  // Send the original recording directly
+                                        } else {
+                                            Log.d("VideoDebug", "[VideoDebug] Compression completed")
+                                            Log.d("VideoDebug", "[VideoDebug] Compressed file path = ${compFile.absolutePath}")
+                                            Log.d("VideoDebug", "[VideoDebug] Compressed file size = ${compFile.length()} bytes")
+                                            compressed
                                         }
-                                        
-                                        Log.d("VideoDebug", "[VideoDebug] Compression completed")
-                                        Log.d("VideoDebug", "[VideoDebug] Compressed file path = ${compFile.absolutePath}")
-                                        Log.d("VideoDebug", "[VideoDebug] Compressed file exists = true")
-                                        compressed
                                     } else {
                                         // Save drawing canvas & overlays to image
                                         Log.d("MediaDebug", "[MediaDebug] Compression started")

@@ -29,7 +29,7 @@ object MessageQueries {
         db.rawQuery("""
             SELECT * FROM messages 
             WHERE (senderId = ? OR targetId = ?) 
-            AND type IN ('TEXT', 'IMAGE', 'FILE', 'VOICE', 'LOCATION_SHARE')
+            AND type IN ('TEXT', 'IMAGE', 'VIDEO', 'FILE', 'VOICE', 'LOCATION_SHARE')
             ORDER BY timestamp ASC
         """, arrayOf(peerId, peerId)).use { cursor ->
             while (cursor.moveToNext()) {
@@ -45,7 +45,7 @@ object MessageQueries {
             SELECT * FROM messages 
             WHERE status IN ('QUEUED', 'SENT') 
             AND ttl > 0
-            AND type IN ('TEXT', 'IMAGE', 'FILE', 'VOICE', 'ACK', 'LOCATION_PING')
+            AND type IN ('TEXT', 'IMAGE', 'VIDEO', 'FILE', 'VOICE', 'ACK', 'LOCATION_PING')
             ORDER BY timestamp ASC
         """, emptyArray()).use { cursor ->
             while (cursor.moveToNext()) {
@@ -56,7 +56,7 @@ object MessageQueries {
     }
 
     fun deleteConversation(db: SQLiteDatabase, peerId: String) {
-        db.delete("messages", "(senderId = ? OR targetId = ?) AND type IN ('TEXT', 'IMAGE', 'FILE', 'VOICE')", arrayOf(peerId, peerId))
+        db.delete("messages", "(senderId = ? OR targetId = ?) AND type IN ('TEXT', 'IMAGE', 'VIDEO', 'FILE', 'VOICE')", arrayOf(peerId, peerId))
     }
 
     fun deleteExpired(db: SQLiteDatabase, before: Long) {

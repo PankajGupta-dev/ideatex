@@ -719,11 +719,15 @@ class WiFiDirectTransport(
             }
 
             // BUG FIX: Gracefully signal end-of-stream so the receiver's
-            // readFully() doesn't get an abrupt RST. This lets the TCP kernel
-            // drain its send buffer before the socket is torn down.
-            try { socket.shutdownOutput() } catch (_: Exception) {}
-            // Brief wait to let receiver drain
-            Thread.sleep(100)
+            // readFully() doesn't get an abrupt RST.
+            try {
+                socket.soTimeout = 15000 // 15s timeout to wait for receiver completion
+                socket.shutdownOutput()
+                // Wait for the receiver to completely read all bytes and close the connection
+                socket.getInputStream().read()
+            } catch (e: Exception) {
+                Log.w(TAG, "Graceful socket shutdown wait interrupted: ${e.message}")
+            }
             socket.close()
 
             if (isVideo) {

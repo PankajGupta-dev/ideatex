@@ -95,6 +95,8 @@ object MediaCompressor {
     ): Uri = withContext(Dispatchers.IO) {
         try {
             Log.d("VideoDebug", "[VideoDebug] Compression started")
+            Log.d("VideoDebug", "[VideoDebug] Input URI = $uri")
+            Log.d("VideoDebug", "[VideoDebug] Requested trim: startMs=$startTimeMs endMs=$endTimeMs")
             val contentResolver = context.contentResolver
             val cacheFile = File(context.cacheDir, "TRIMMED_COMPRESSED_${System.currentTimeMillis()}.mp4")
 
@@ -117,9 +119,19 @@ object MediaCompressor {
 
             Log.d(TAG, "Compressing video: original resolution ${width}x${height}, duration: ${durationMs}ms")
 
+            // BUG FIX: Guard against zero-length trim window.
+            // If endTimeMs <= startTimeMs (e.g. metadata not loaded yet), default to full duration capped at 30s.
+            val safeEndTimeMs = if (endTimeMs <= startTimeMs) {
+                Log.w("VideoDebug", "[VideoDebug] Zero-length trim detected (start=$startTimeMs end=$endTimeMs). Defaulting to full duration.")
+                Math.min(durationMs, startTimeMs + 30000L)
+            } else {
+                endTimeMs
+            }
+
             // Enforce max 30s limit or user selected trim points
             val actualStartTimeUs = startTimeMs * 1000L
-            val actualEndTimeUs = Math.min(endTimeMs, Math.min(durationMs, startTimeMs + 30000L)) * 1000L
+            val actualEndTimeUs = Math.min(safeEndTimeMs, Math.min(durationMs, startTimeMs + 30000L)) * 1000L
+            Log.d("VideoDebug", "[VideoDebug] Trim window: startUs=$actualStartTimeUs endUs=$actualEndTimeUs (videoDurationMs=$durationMs)")
 
             // Setup extractor
             val extractor = MediaExtractor()
@@ -197,14 +209,26 @@ object MediaCompressor {
             muxer.release()
             extractor.release()
 
-            Log.d(TAG, "Video trimming/compression complete: ${cacheFile.length()} bytes")
+            val compressedSize = cacheFile.length()
+            Log.d(TAG, "Video trimming/compression complete: $compressedSize bytes")
             Log.d("VideoDebug", "[VideoDebug] Compression completed")
             Log.d("VideoDebug", "[VideoDebug] Compressed file path = ${cacheFile.absolutePath}")
             Log.d("VideoDebug", "[VideoDebug] Compressed file exists = ${cacheFile.exists()}")
-            Uri.fromFile(cacheFile)
+            Log.d("VideoDebug", "[VideoDebug] Compressed file size = $compressedSize bytes")
+
+            // BUG FIX: Validate the compressed output is a real video file.
+            // An MP4 with only a container header (no actual video samples) is typically < 1KB.
+            if (compressedSize < 1024) {
+                Log.e("VideoDebug", "[VideoDebug] Compressed file too small ($compressedSize bytes) — likely empty container. Using original file.")
+                cacheFile.delete()
+                uri // Return original recording file
+            } else {
+                Uri.fromFile(cacheFile)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error trimming/compressing video: ${e.message}", e)
-            uri // Fallback to original
+            Log.e("VideoDebug", "[VideoDebug] Compression FAILED: ${e.message}")
+            uri // Fallback to original recording file
         }
     }
 

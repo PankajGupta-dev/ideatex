@@ -34,6 +34,7 @@ class FileStorage(private val context: Context) {
     fun generateFileName(type: MessageType, extension: String): String {
         val prefix = when (type) {
             MessageType.IMAGE -> "IMG"
+            MessageType.VIDEO -> "VID"
             MessageType.VOICE -> "VOICE"
             else -> "FILE"
         }

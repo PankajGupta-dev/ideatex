@@ -1,9 +1,13 @@
 package com.alertnet.app.ui.screen
 
+import android.content.ContentValues
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.util.Log
+import android.widget.Toast
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
@@ -42,6 +46,7 @@ import androidx.media3.ui.PlayerView
 import com.alertnet.app.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -61,6 +66,7 @@ fun MediaViewerScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var isPlaying by remember { mutableStateOf(true) }
     var currentPositionMs by remember { mutableStateOf(0L) }
     var durationMs by remember { mutableStateOf(0L) }
@@ -265,10 +271,56 @@ fun MediaViewerScreen(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Mock Download icon endpoint
+                // Download icon endpoint — saves file to local device gallery using MediaStore
                 IconButton(
                     onClick = {
-                        android.widget.Toast.makeText(context, "Saved to Gallery", android.widget.Toast.LENGTH_SHORT).show()
+                        coroutineScope.launch {
+                            try {
+                                val resolver = context.contentResolver
+                                val extension = if (mediaType == "video") "mp4" else "jpg"
+                                val mimeType = if (mediaType == "video") "video/mp4" else "image/jpeg"
+                                val fileName = "AlertNet_${System.currentTimeMillis()}.$extension"
+
+                                val contentValues = ContentValues().apply {
+                                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        put(MediaStore.MediaColumns.RELATIVE_PATH, if (mediaType == "video") "Movies/AlertNet" else "Pictures/AlertNet")
+                                        put(MediaStore.MediaColumns.IS_PENDING, 1)
+                                    }
+                                }
+
+                                val collection = if (mediaType == "video") {
+                                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                                } else {
+                                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                                }
+
+                                withContext(Dispatchers.IO) {
+                                    val uri = resolver.insert(collection, contentValues)
+                                    if (uri != null) {
+                                        resolver.openInputStream(mediaUri)?.use { input ->
+                                            resolver.openOutputStream(uri)?.use { output ->
+                                                input.copyTo(output)
+                                            }
+                                        }
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            contentValues.clear()
+                                            contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                            resolver.update(uri, contentValues, null, null)
+                                        }
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "Saved to Gallery", Toast.LENGTH_LONG).show()
+                                        }
+                                    } else {
+                                        throw Exception("Failed to insert media record")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.e("MediaViewerScreen", "Failed to save media to gallery", e)
+                                Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     },
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 ) {

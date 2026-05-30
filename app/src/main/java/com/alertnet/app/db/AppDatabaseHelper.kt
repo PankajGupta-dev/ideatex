@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 class AppDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
     companion object {
-        const val DATABASE_VERSION = 4
+        const val DATABASE_VERSION = 5
         const val DATABASE_NAME = "alertnet.db"
     }
 
@@ -73,6 +73,18 @@ class AppDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
         db.execSQL("""
             CREATE INDEX index_peers_lastSeen ON peers(lastSeen)
         """)
+
+        db.execSQL("""
+            CREATE TABLE call_logs (
+                id TEXT PRIMARY KEY,
+                callerId TEXT NOT NULL,
+                receiverId TEXT NOT NULL,
+                startTime INTEGER NOT NULL,
+                endTime INTEGER,
+                duration INTEGER DEFAULT 0,
+                status TEXT NOT NULL
+            )
+        """)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -81,6 +93,7 @@ class AppDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
             db.execSQL("DROP TABLE IF EXISTS messages")
             db.execSQL("DROP TABLE IF EXISTS seen_messages")
             db.execSQL("DROP TABLE IF EXISTS peers")
+            db.execSQL("DROP TABLE IF EXISTS call_logs")
             onCreate(db)
             return
         }
@@ -90,6 +103,20 @@ class AppDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_N
             db.execSQL("ALTER TABLE peers ADD COLUMN longitude REAL")
             db.execSQL("ALTER TABLE peers ADD COLUMN location_accuracy_meters REAL")
             db.execSQL("ALTER TABLE peers ADD COLUMN location_updated_at INTEGER")
+        }
+        if (oldVersion < 5) {
+            // Add call_logs table — non-destructive
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS call_logs (
+                    id TEXT PRIMARY KEY,
+                    callerId TEXT NOT NULL,
+                    receiverId TEXT NOT NULL,
+                    startTime INTEGER NOT NULL,
+                    endTime INTEGER,
+                    duration INTEGER DEFAULT 0,
+                    status TEXT NOT NULL
+                )
+            """)
         }
     }
 }

@@ -778,4 +778,59 @@ class WiFiDirectTransport(
 
         return hasLocation && hasNearby
     }
+
+    // ─── Audio Socket Transport ──────────────────────────────────
+
+    private var audioServerSocket: ServerSocket? = null
+    private var audioServerJob: Job? = null
+
+    fun startAudioServer(onConnection: (Socket) -> Unit) {
+        stopAudioServer()
+        audioServerJob = scope.launch(Dispatchers.IO) {
+            try {
+                val server = ServerSocket(8889)
+                audioServerSocket = server
+                server.reuseAddress = true
+                Log.d(TAG, "Audio server socket listening on port 8889")
+                while (isActive && isRunning) {
+                    val socket = server.accept()
+                    Log.d(TAG, "Audio server accepted connection from ${socket.inetAddress?.hostAddress}")
+                    onConnection(socket)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Audio server socket exception: ${e.message}")
+            } finally {
+                try { audioServerSocket?.close() } catch (_: Exception) {}
+                audioServerSocket = null
+            }
+        }
+    }
+
+    fun stopAudioServer() {
+        audioServerJob?.cancel()
+        audioServerJob = null
+        try {
+            audioServerSocket?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing audio server socket", e)
+        }
+        audioServerSocket = null
+    }
+
+    suspend fun connectAudioSocket(peerId: String): Socket? = withContext(Dispatchers.IO) {
+        val targetIP = resolveIP(peerId) ?: run {
+            Log.w(TAG, "Cannot resolve IP for audio socket to peer: $peerId")
+            return@withContext null
+        }
+        try {
+            val socket = Socket()
+            socket.connect(InetSocketAddress(targetIP, 8889), 5000)
+            Log.d(TAG, "Audio socket connected to $peerId ($targetIP) on port 8889")
+            socket
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to connect audio socket to $peerId ($targetIP) on port 8889", e)
+            null
+        }
+    }
 }
+

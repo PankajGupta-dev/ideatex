@@ -31,6 +31,9 @@ class ViewModelFactory(
             modelClass.isAssignableFrom(LocationPrivacyViewModel::class.java) -> {
                 LocationPrivacyViewModel(app.settingsRepository) as T
             }
+            modelClass.isAssignableFrom(VoiceCallViewModel::class.java) -> {
+                VoiceCallViewModel(app.voiceCallManager) as T
+            }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }

@@ -88,6 +88,10 @@ class MeshManager(
     private val _incomingSOS = MutableSharedFlow<MeshMessage>(extraBufferCapacity = 8)
     val incomingSOS: SharedFlow<MeshMessage> = _incomingSOS.asSharedFlow()
 
+    /** Emits incoming CALL_REQUEST, CALL_ACCEPT, CALL_REJECT, CALL_END signals */
+    private val _incomingCallSignals = MutableSharedFlow<MeshMessage>(extraBufferCapacity = 8)
+    val incomingCallSignals: SharedFlow<MeshMessage> = _incomingCallSignals.asSharedFlow()
+
     private var isRunning = false
 
     // ─── Connection Initiation ──────────────────────────────────
@@ -434,6 +438,31 @@ class MeshManager(
         return CryptoManager.decryptString(encryptedPayload, key) ?: encryptedPayload
     }
 
+    /**
+     * Send a voice call signaling message to a target peer.
+     */
+    suspend fun sendCallSignal(targetId: String, type: MessageType, callSignal: CallSignal) {
+        val message = MeshMessage(
+            id = UUID.randomUUID().toString(),
+            senderId = deviceId,
+            targetId = targetId,
+            type = type,
+            payload = json.encodeToString(callSignal),
+            timestamp = System.currentTimeMillis(),
+            ttl = 1,
+            hopCount = 0,
+            hopPath = listOf(deviceId),
+            status = DeliveryStatus.QUEUED
+        )
+        try {
+            val serialized = json.encodeToString(message).toByteArray(Charsets.UTF_8)
+            transportManager.sendToPeer(targetId, serialized)
+            Log.d(TAG, "Sent call signal $type to $targetId")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send call signal $type to $targetId", e)
+        }
+    }
+
     // ─── Internal: File Receive Processing ─────────────────────
 
     private fun startFileReceiveProcessing() {
@@ -537,6 +566,13 @@ class MeshManager(
                 _incomingSOS.emit(delivered)
                 Log.d(TAG, "SOS received from ${decision.message.senderId}")
                 updateStats()
+            }
+
+            is RoutingDecision.CallSignalReceived -> {
+                scope.launch {
+                    _incomingCallSignals.emit(decision.message)
+                }
+                Log.d(TAG, "Call signal received: ${decision.message.type} from ${decision.message.senderId}")
             }
         }
     }

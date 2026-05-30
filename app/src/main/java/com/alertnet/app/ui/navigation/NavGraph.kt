@@ -1,5 +1,8 @@
 package com.alertnet.app.ui.navigation
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -36,8 +39,11 @@ import com.alertnet.app.ui.screen.LocationPrivacySettingsScreen
 import com.alertnet.app.ui.screen.MeshMapScreen
 import com.alertnet.app.ui.screen.MeshStatsScreen
 import com.alertnet.app.ui.screen.PeersScreen
+import com.alertnet.app.ui.screen.VoiceCallScreen
 import com.alertnet.app.ui.theme.*
 import com.alertnet.app.ui.viewmodel.*
+import com.alertnet.app.call.CallState
+import androidx.compose.material.icons.filled.PhoneInTalk
 import com.google.android.gms.location.LocationServices
 
 private const val SOS_CHANNEL_ID = "alertnet_sos"
@@ -62,6 +68,97 @@ fun NavGraph(app: AlertNetApplication) {
     // Create SOS notification channel once
     LaunchedEffect(Unit) {
         createSOSNotificationChannel(context)
+    }
+
+    val globalCallState by app.voiceCallManager.callState.collectAsState()
+    val globalPeerId by app.voiceCallManager.peerId.collectAsState()
+    val globalPeerName by app.voiceCallManager.peerName.collectAsState()
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            app.voiceCallManager.acceptCall()
+            val pId = globalPeerId ?: ""
+            val pName = globalPeerName
+            navController.navigate("voice_call/$pId/$pName")
+        }
+    }
+
+    // If an incoming call arrives (RINGING), show the full-screen Incoming Call dialog!
+    if (globalCallState == CallState.RINGING) {
+        AlertDialog(
+            onDismissRequest = { app.voiceCallManager.rejectCall() },
+            containerColor = SurfaceCard,
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.PhoneInTalk,
+                    contentDescription = null,
+                    tint = MeshGreen,
+                    modifier = Modifier.size(56.dp)
+                )
+            },
+            title = {
+                Text(
+                    "Incoming Voice Call",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = globalPeerName,
+                        color = TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "AlertNet Calling...",
+                        color = TextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MeshGreen
+                    )
+                ) {
+                    Text("ACCEPT", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = { app.voiceCallManager.rejectCall() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StatusFailed
+                    )
+                ) {
+                    Text("REJECT", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(globalCallState) {
+        if (globalCallState == CallState.CONNECTED) {
+            val currentRoute = navController.currentBackStackEntry?.destination?.route
+            if (currentRoute != null && !currentRoute.startsWith("voice_call")) {
+                val pId = globalPeerId ?: ""
+                val pName = globalPeerName
+                navController.navigate("voice_call/$pId/$pName")
+            }
+        }
     }
 
     NavHost(
@@ -226,7 +323,44 @@ fun NavGraph(app: AlertNetApplication) {
                     navController.navigate(
                         "mesh_map?focusLat=$lat&focusLon=$lon&pinType=$peerId"
                     )
+                },
+                onInitiateCall = {
+                    app.voiceCallManager.initiateCall(peerId, peerName)
+                    navController.navigate("voice_call/$peerId/$peerName")
                 }
+            )
+        }
+
+        composable(
+            route = "voice_call/{peerId}/{peerName}",
+            arguments = listOf(
+                navArgument("peerId") { type = NavType.StringType },
+                navArgument("peerName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val peerId = backStackEntry.arguments?.getString("peerId") ?: return@composable
+            val peerName = backStackEntry.arguments?.getString("peerName") ?: "Peer"
+            val voiceCallVm: VoiceCallViewModel = viewModel(factory = factory)
+            val callState by voiceCallVm.callState.collectAsState()
+            val callDuration by voiceCallVm.callDuration.collectAsState()
+            val isMuted by voiceCallVm.isMuted.collectAsState()
+            val isSpeaker by voiceCallVm.isSpeaker.collectAsState()
+
+            LaunchedEffect(callState) {
+                if (callState == CallState.IDLE) {
+                    navController.popBackStack()
+                }
+            }
+
+            VoiceCallScreen(
+                peerName = peerName,
+                callState = callState,
+                callDuration = callDuration,
+                isMuted = isMuted,
+                isSpeaker = isSpeaker,
+                onMuteToggle = { voiceCallVm.toggleMute() },
+                onSpeakerToggle = { voiceCallVm.toggleSpeaker() },
+                onEndCall = { voiceCallVm.endCall() }
             )
         }
 

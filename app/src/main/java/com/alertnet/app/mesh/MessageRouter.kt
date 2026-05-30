@@ -56,6 +56,14 @@ class MessageRouter(
         // 2. Mark as seen (prevents re-processing)
         deduplicationManager.markSeen(message.id)
 
+        // 3b. Handle Call signaling messages
+        if (message.type == MessageType.CALL_REQUEST ||
+            message.type == MessageType.CALL_ACCEPT ||
+            message.type == MessageType.CALL_REJECT ||
+            message.type == MessageType.CALL_END) {
+            return RoutingDecision.CallSignalReceived(message)
+        }
+
         // 3. Handle ACK messages
         if (message.type == MessageType.ACK) {
             if (message.targetId == deviceId) {
@@ -234,4 +242,7 @@ sealed class RoutingDecision {
 
     /** SOS received — show emergency alert to the user */
     data class SOSReceived(val message: MeshMessage) : RoutingDecision()
+
+    /** Call signaling received */
+    data class CallSignalReceived(val message: MeshMessage) : RoutingDecision()
 }

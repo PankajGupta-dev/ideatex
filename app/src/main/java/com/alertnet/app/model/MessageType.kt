@@ -28,5 +28,14 @@ enum class MessageType {
     /** User-triggered location share — renders as a chat bubble, never updates peer DB */
     LOCATION_SHARE,
     /** Emergency SOS broadcast — sends location + "Help me" to all nearby peers */
-    SOS
+    SOS,
+    /** Voice call invitation */
+    CALL_REQUEST,
+    /** Voice call accepted */
+    CALL_ACCEPT,
+    /** Voice call rejected */
+    CALL_REJECT,
+    /** Voice call ended */
+    CALL_END
 }
+

@@ -38,6 +38,7 @@
 
     <!-- Voice recording -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
 
     <!-- BLE feature declaration (not required, but useful for Play Store filtering) -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>

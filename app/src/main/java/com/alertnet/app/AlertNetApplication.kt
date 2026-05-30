@@ -8,6 +8,7 @@ import com.alertnet.app.mesh.MeshManager
 import com.alertnet.app.repository.MessageRepository
 import com.alertnet.app.repository.SettingsRepository
 import com.alertnet.app.transport.TransportManager
+import com.alertnet.app.call.VoiceCallManager
 import java.util.UUID
 
 /**
@@ -47,6 +48,9 @@ class AlertNetApplication : Application() {
     lateinit var settingsRepository: SettingsRepository
         private set
 
+    lateinit var voiceCallManager: VoiceCallManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -63,6 +67,7 @@ class AlertNetApplication : Application() {
         messageRepository = MessageRepository()
         meshManager = MeshManager(this, deviceId, transportManager, messageRepository)
         settingsRepository = SettingsRepository(this, deviceId)
+        voiceCallManager = VoiceCallManager(this, deviceId, meshManager, transportManager.wifiDirectTransport)
 
         Log.d(TAG, "AlertNet initialized")
     }

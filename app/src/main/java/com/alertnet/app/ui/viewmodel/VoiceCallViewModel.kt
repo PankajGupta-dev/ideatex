@@ -1,0 +1,38 @@
+package com.alertnet.app.ui.viewmodel
+
+import androidx.lifecycle.ViewModel
+import com.alertnet.app.call.CallState
+import com.alertnet.app.call.VoiceCallManager
+import kotlinx.coroutines.flow.StateFlow
+
+class VoiceCallViewModel(
+    private val voiceCallManager: VoiceCallManager
+) : ViewModel() {
+
+    val callState: StateFlow<CallState> = voiceCallManager.callState
+    val peerId: StateFlow<String?> = voiceCallManager.peerId
+    val peerName: StateFlow<String> = voiceCallManager.peerName
+    val callDuration: StateFlow<Long> = voiceCallManager.callDuration
+    val isMuted: StateFlow<Boolean> = voiceCallManager.isMuted
+    val isSpeaker: StateFlow<Boolean> = voiceCallManager.isSpeakerOn
+
+    fun acceptCall() {
+        voiceCallManager.acceptCall()
+    }
+
+    fun rejectCall() {
+        voiceCallManager.rejectCall()
+    }
+
+    fun endCall() {
+        voiceCallManager.endCall()
+    }
+
+    fun toggleMute() {
+        voiceCallManager.toggleMute()
+    }
+
+    fun toggleSpeaker() {
+        voiceCallManager.toggleSpeaker()
+    }
+}

@@ -60,7 +60,8 @@ fun ChatScreen(
     viewModel: ChatViewModel,
     locationShareViewModel: LocationShareViewModel? = null,
     onBack: () -> Unit,
-    onViewOnMap: ((Double, Double) -> Unit)? = null
+    onViewOnMap: ((Double, Double) -> Unit)? = null,
+    onInitiateCall: () -> Unit = {}
 ) {
     var viewMode by remember { mutableStateOf(ChatViewMode.CHAT) }
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
@@ -97,6 +98,14 @@ fun ChatScreen(
         hasAudioPermission = granted
         if (granted) {
             viewModel.startVoiceRecording()
+        }
+    }
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            onInitiateCall()
         }
     }
 
@@ -221,6 +230,17 @@ fun ChatScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
+                                    tint = TextPrimary
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = {
+                                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = "Voice Call",
                                     tint = TextPrimary
                                 )
                             }
